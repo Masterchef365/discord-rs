@@ -628,8 +628,6 @@ impl Discord {
 		mut file: R,
 		filename: &str,
 	) -> Result<Message> {
-		use std::io::Write;
-
 		let url = match hyper::Url::parse(&format!(api_concat!("/channels/{}/messages"), channel)) {
 			Ok(url) => url,
 			Err(_) => return Err(Error::Other("Invalid URL in send_file")),
@@ -649,21 +647,21 @@ impl Discord {
 			)
 		}
 
-		let mut request = hyper::client::Request::new(hyper::method::Method::Post, url)?;
-		request
-			.headers_mut()
-			.set(hyper::header::Authorization(self.token.clone()));
-		request
-			.headers_mut()
-			.set(hyper::header::UserAgent(USER_AGENT.to_owned()));
-		request
-			.headers_mut()
-			.set(hyper::header::ContentType(multipart_mime(
-				&http_buffer.boundary,
-			)));
-		let mut request = request.start()?;
-		request.write(&http_buffer.buf[..])?;
-		Message::decode(serde_json::from_reader(check_status(request.send())?)?)
+                // Set up headers
+                let mut headers = hyper::header::Headers::new();
+                headers.set(hyper::header::Authorization(self.token.clone()));
+                headers.set(hyper::header::UserAgent(USER_AGENT.to_owned()));
+                headers.set(hyper::header::ContentType(multipart_mime(&http_buffer.boundary)));
+
+                // Send request
+                let response = self
+                    .client
+                    .post(url)
+                    .headers(headers)
+                    .body(&http_buffer.buf[..])
+                    .send();
+
+		Message::decode(serde_json::from_reader(check_status(response)?)?)
 	}
 
 	/// Acknowledge this message as "read" by this client.
